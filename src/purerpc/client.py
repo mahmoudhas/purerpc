@@ -5,9 +5,17 @@ import anyio
 
 from purerpc.grpc_proto import GRPCProtoSocket
 from purerpc.grpclib.config import GRPCConfiguration
+from purerpc.grpclib.exceptions import GRPCError, RpcInitFailedError
 from purerpc.rpc import RPCSignature, Cardinality
 from purerpc.wrappers import ClientStubUnaryUnary, ClientStubStreamStream, ClientStubUnaryStream, \
     ClientStubStreamUnary
+
+
+def _wrap_init_error(exc: BaseException) -> None:
+    """Wrap connection/init failures as RpcInitFailedError, re-raise GRPC errors as-is."""
+    if isinstance(exc, GRPCError):
+        raise exc
+    raise RpcInitFailedError(str(exc)) from exc
 
 
 class _Channel(AsyncExitStack):
@@ -20,12 +28,15 @@ class _Channel(AsyncExitStack):
 
     async def __aenter__(self):
         await super().__aenter__()  # Does nothing
-        socket = await anyio.connect_tcp(self._host, self._port,
-                                         ssl_context=self._ssl_context,
-                                         tls=self._ssl_context is not None,
-                                         tls_standard_compatible=False)
-        config = GRPCConfiguration(client_side=True)
-        self._grpc_socket = await self.enter_async_context(GRPCProtoSocket(config, socket))
+        try:
+            socket = await anyio.connect_tcp(self._host, self._port,
+                                             ssl_context=self._ssl_context,
+                                             tls=self._ssl_context is not None,
+                                             tls_standard_compatible=False)
+            config = GRPCConfiguration(client_side=True)
+            self._grpc_socket = await self.enter_async_context(GRPCProtoSocket(config, socket))
+        except BaseException as exc:
+            _wrap_init_error(exc)
         return self
 
 
@@ -45,11 +56,14 @@ class Client:
         message_type = request_type.DESCRIPTOR.full_name
         if metadata is None:
             metadata = ()
-        stream = await self.channel._grpc_socket.start_request("http", self.service_name,
-                                                               method_name, message_type,
-                                                              "{}:{}".format(self.channel._host,
-                                                                             self.channel._port),
-                                                               custom_metadata=metadata)
+        try:
+            stream = await self.channel._grpc_socket.start_request("http", self.service_name,
+                                                                   method_name, message_type,
+                                                                   "{}:{}".format(self.channel._host,
+                                                                                  self.channel._port),
+                                                                   custom_metadata=metadata)
+        except BaseException as exc:
+            _wrap_init_error(exc)
         stream.expect_message_type(response_type)
         return stream
 

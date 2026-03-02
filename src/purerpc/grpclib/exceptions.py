@@ -33,6 +33,15 @@ class RpcFailedError(GRPCError):
         return self._status
 
 
+class RpcInitFailedError(RpcFailedError):
+    """Raised when an RPC fails at the initial HTTP request rather than during the input/output streams."""
+
+    def __init__(self, message="", status=None):
+        if status is None:
+            status = Status(StatusCode.UNAVAILABLE, message)
+        super().__init__(status)
+
+
 class CancelledError(RpcFailedError):
     def __init__(self, message=""):
         super().__init__(Status(StatusCode.CANCELLED, message))

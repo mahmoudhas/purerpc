@@ -81,6 +81,14 @@ async def test_errors_purerpc_client(greeter_pb2, greeter_grpc, channel):
             await aiter.__anext__()
 
 
+async def test_rpc_init_failed_connection_refused(greeter_pb2, greeter_grpc):
+    """RpcInitFailedError is raised when connection fails at init (e.g. connection refused)."""
+    with pytest.raises(purerpc.RpcInitFailedError, match=r"connection|refused|Refused"):
+        async with purerpc.insecure_channel("127.0.0.1", 1) as channel:
+            stub = greeter_grpc.GreeterStub(channel)
+            await stub.SayHello(greeter_pb2.HelloRequest(name="World"))
+
+
 @purerpc_channel("port")
 async def test_errors_purerpc_async_generator(greeter_pb2, greeter_grpc, channel):
     async def generator():

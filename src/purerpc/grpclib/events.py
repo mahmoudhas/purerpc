@@ -2,8 +2,8 @@ import urllib.parse
 import datetime
 
 from .headers import HeaderDict
-from .exceptions import ProtocolError
-from .status import Status
+from .exceptions import ProtocolError, RpcInitFailedError
+from .status import Status, StatusCode
 
 
 class Event:
@@ -147,8 +147,25 @@ class ResponseReceived(Event):
 
     @staticmethod
     def parse_from_stream_id_and_headers_destructive(stream_id: int, headers: HeaderDict):
-        if int(headers.pop(":status")) != 200:
-            raise ProtocolError("http status is not 200")
+        http_status = int(headers.pop(":status"))
+        if http_status != 200:
+            # Map common HTTP status codes to gRPC status
+            status_map = {
+                400: StatusCode.INVALID_ARGUMENT,
+                401: StatusCode.UNAUTHENTICATED,
+                403: StatusCode.PERMISSION_DENIED,
+                404: StatusCode.NOT_FOUND,
+                408: StatusCode.DEADLINE_EXCEEDED,
+                429: StatusCode.RESOURCE_EXHAUSTED,
+                502: StatusCode.UNAVAILABLE,
+                503: StatusCode.UNAVAILABLE,
+                504: StatusCode.DEADLINE_EXCEEDED,
+            }
+            status_code = status_map.get(http_status, StatusCode.UNKNOWN)
+            raise RpcInitFailedError(
+                "HTTP {} at initial request".format(http_status),
+                status=Status(status_code, "HTTP {} at initial request".format(http_status)),
+            )
 
         content_type = headers.pop("content-type")
         if not content_type.startswith("application/grpc"):
