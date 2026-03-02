@@ -125,6 +125,7 @@ class Server:
         # TODO: resource usage warning
         async with AsyncExitStack() as stack:
             tcp_server = await anyio.create_tcp_listener(local_port=self.port, reuse_port=True)
+            await stack.enter_async_context(tcp_server)
             # read the resulting port, in case it was 0
             self.port = tcp_server.extra(anyio.abc.SocketAttribute.local_port)
             if self._ssl_context:
