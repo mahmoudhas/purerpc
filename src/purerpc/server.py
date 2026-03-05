@@ -205,13 +205,13 @@ class ConnectionHandler:
                 await stream.close(error.status)
             except:
                 # TODO: limit catch to Exception, so async cancel can propagate
-                log.warning("Got exception while writing response stream",
-                            exc_info=log.getEffectiveLevel() == logging.DEBUG)
+                log.debug("Got exception while writing response stream",
+                            exc_info=True)
                 await stream.close(Status(StatusCode.CANCELLED, status_message=repr(sys.exc_info())))
         except:
             # TODO: limit catch to Exception, so async cancel can propagate
-            log.warning("Got exception in request_received",
-                        exc_info=log.getEffectiveLevel() == logging.DEBUG)
+            log.debug("Got exception in request_received",
+                        exc_info=True)
 
     async def __call__(self, stream_: anyio.abc.SocketStream):
         # TODO: Should at least pass through GeneratorExit
